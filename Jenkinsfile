@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub')
     }
 
     stages {
@@ -14,6 +15,7 @@ pipeline {
                 sh 'java -version'
                 sh 'which mvn || echo "mvn not found in PATH"'
                 sh 'mvn -version || echo "Failed to get Maven version"'
+                sh 'docker --version || echo "Docker not found"'
             }
         }
 
@@ -35,6 +37,24 @@ pipeline {
             }
         }
 
+        stage('Docker Login') {
+            steps {
+                sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t $DOCKERHUB_CREDENTIALS_USR/my-maven-webapp:$BUILD_NUMBER .'
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                sh 'docker push $DOCKERHUB_CREDENTIALS_USR/my-maven-webapp:$BUILD_NUMBER'
+            }
+        }
+
         stage('Archive Artifacts') {
             steps {
                 archiveArtifacts artifacts: '**/target/*.war', fingerprint: true
@@ -45,6 +65,7 @@ pipeline {
     post {
         always {
             cleanWs()
+            sh 'docker logout'
         }
         success {
             echo 'Build succeeded!'
